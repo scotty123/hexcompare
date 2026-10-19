@@ -1,4 +1,4 @@
-"""HexCompare 0.1.2 — PyQt6 desktop UI."""
+"""HexCompare 0.1.3 — PyQt6 desktop UI."""
 import sys
 from html import escape
 from pathlib import Path
@@ -14,7 +14,7 @@ from core import compare, load_binary, load_intel_hex
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("HexCompare 0.1.2")
+        self.setWindowTitle("HexCompare 0.1.3")
         self.resize(1250, 720)
         self.data = [None, None]
         self.paths = [None, None]
@@ -46,7 +46,7 @@ class Window(QMainWindow):
         layout.addWidget(self.summary)
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
-            ["Address", "File 1 HEX", "File 2 HEX", "File 1 ASCII", "File 2 ASCII"]
+            ["Address", "File 1 HEX", "File 1 ASCII", "File 2 HEX", "File 2 ASCII"]
         )
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
@@ -96,7 +96,7 @@ class Window(QMainWindow):
         self.table.setColumnCount(4 if stacked else 5)
         self.table.setHorizontalHeaderLabels(
             ['Address', 'File', 'HEX', 'ASCII'] if stacked else
-            ['Address', 'File 1 HEX', 'File 2 HEX', 'File 1 ASCII', 'File 2 ASCII']
+            ['Address', 'File 1 HEX', 'File 1 ASCII', 'File 2 HEX', 'File 2 ASCII']
         )
         self.table.setUpdatesEnabled(False)
         header = self.table.horizontalHeader()
@@ -104,7 +104,7 @@ class Window(QMainWindow):
         if stacked:
             widths = [105, 75, 490, 185]
         else:
-            widths = [105, 490, 490, 185, 185]
+            widths = [105, 490, 185, 490, 185]
         for col, width in enumerate(widths):
             header.resizeSection(col, width)
         try:
@@ -127,7 +127,7 @@ class Window(QMainWindow):
                     if stacked:
                         self.table.setItem(target_row, 0, QTableWidgetItem(f'{start:08X}'))
                         self.table.setItem(target_row, 1, QTableWidgetItem(f'File {side + 1}'))
-                    for column, content in ((2 if stacked else side + 1, "&nbsp;".join(hex_values)), (3 if stacked else side + 3, "".join(ascii_values))):
+                    for column, content in ((2 if stacked else 1 + side * 2, "&nbsp;".join(hex_values)), (3 if stacked else 2 + side * 2, "".join(ascii_values))):
                         widget = QTextBrowser()
                         widget.setFrameShape(QTextBrowser.Shape.NoFrame)
                         widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)

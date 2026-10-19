@@ -1,4 +1,4 @@
-"""HexCompare 0.1.0 — PyQt6 desktop UI."""
+"""HexCompare 0.1.1 — PyQt6 desktop UI."""
 import sys
 from html import escape
 from pathlib import Path
@@ -14,7 +14,7 @@ from core import compare, load_binary, load_intel_hex
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("HexCompare 0.1.0")
+        self.setWindowTitle("HexCompare 0.1.1")
         self.resize(1250, 720)
         self.data = [None, None]
         self.paths = [None, None]
@@ -34,6 +34,11 @@ class Window(QMainWindow):
         self.differences_only.setChecked(True)
         self.differences_only.toggled.connect(self.refresh)
         bar.addWidget(self.differences_only)
+        bar.addWidget(QLabel('Diff layout:'))
+        self.diff_layout = QComboBox()
+        self.diff_layout.addItems(['Side by side', 'Stacked'])
+        self.diff_layout.currentIndexChanged.connect(self.refresh)
+        bar.addWidget(self.diff_layout)
         layout.addLayout(bar)
         self.paths_label = QLabel("Choose two files.")
         layout.addWidget(self.paths_label)
@@ -87,11 +92,18 @@ class Window(QMainWindow):
             sorted({address // 16 * 16 for address in left.keys() | right.keys()})
         )
         changed = set(result.changed)
+        stacked = self.diff_layout.currentIndex() == 1
+        self.table.setColumnCount(4 if stacked else 5)
+        self.table.setHorizontalHeaderLabels(
+            ['Address', 'File', 'HEX', 'ASCII'] if stacked else
+            ['Address', 'File 1 HEX', 'File 2 HEX', 'File 1 ASCII', 'File 2 ASCII']
+        )
         self.table.setUpdatesEnabled(False)
         try:
-            self.table.setRowCount(len(blocks))
+            self.table.setRowCount(len(blocks) * (2 if stacked else 1))
             for row, start in enumerate(blocks):
-                self.table.setItem(row, 0, QTableWidgetItem(f"{start:08X}"))
+                if not stacked:
+                    self.table.setItem(row, 0, QTableWidgetItem(f"{start:08X}"))
                 for side, memory in enumerate((left, right)):
                     hex_values, ascii_values = [], []
                     for address in range(start, start + 16):
@@ -103,7 +115,11 @@ class Window(QMainWindow):
                             c = f'<span style="color:#e02020;font-weight:bold">{c}</span>'
                         hex_values.append(h)
                         ascii_values.append(c)
-                    for column, content in ((side + 1, "&nbsp;".join(hex_values)), (side + 3, "".join(ascii_values))):
+                    target_row = row * 2 + side if stacked else row
+                    if stacked:
+                        self.table.setItem(target_row, 0, QTableWidgetItem(f'{start:08X}'))
+                        self.table.setItem(target_row, 1, QTableWidgetItem(f'File {side + 1}'))
+                    for column, content in ((2 if stacked else side + 1, "&nbsp;".join(hex_values)), (3 if stacked else side + 3, "".join(ascii_values))):
                         widget = QTextBrowser()
                         widget.setFrameShape(QTextBrowser.Shape.NoFrame)
                         widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -113,8 +129,8 @@ class Window(QMainWindow):
                             '<div style="font-family:Consolas,monospace;font-size:10pt;white-space:nowrap">'
                             + content + "</div>"
                         )
-                        self.table.setCellWidget(row, column, widget)
-                self.table.setRowHeight(row, 28)
+                        self.table.setCellWidget(target_row, column, widget)
+                    self.table.setRowHeight(target_row, 28)
         finally:
             self.table.setUpdatesEnabled(True)
 

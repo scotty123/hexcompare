@@ -5,13 +5,16 @@ from pathlib import Path
 class HexFormatError(ValueError):
     pass
 
-def load_intel_hex(path):
+def load_intel_hex(path, progress=None):
     memory = {}
     base = 0
     eof = False
-    with open(path, encoding="utf-8-sig") as stream:
+    total = Path(path).stat().st_size
+    with open(path, "rb") as stream:
         for number, raw in enumerate(stream, 1):
-            line = raw.strip()
+            line = raw.decode('utf-8-sig').strip()
+            if progress:
+                progress(min(100, int(stream.tell() * 100 / max(total, 1))))
             if not line:
                 continue
             if eof or not line.startswith(":"):
@@ -51,10 +54,23 @@ def load_intel_hex(path):
                 raise HexFormatError(f"Unsupported record type {kind}")
     if not eof:
         raise HexFormatError("Missing EOF")
+    if progress:
+        progress(100)
     return memory
 
-def load_binary(path):
-    return dict(enumerate(Path(path).read_bytes()))
+def load_binary(path, progress=None):
+    memory = {}
+    total = Path(path).stat().st_size
+    with open(path, 'rb') as stream:
+        offset = 0
+        while chunk := stream.read(65536):
+            memory.update((offset + i, value) for i, value in enumerate(chunk))
+            offset += len(chunk)
+            if progress:
+                progress(min(100, int(offset * 100 / max(total, 1))))
+    if progress:
+        progress(100)
+    return memory
 
 @dataclass(frozen=True)
 class Comparison:

@@ -1,4 +1,4 @@
-"""HexCompare 0.1.3 — PyQt6 desktop UI."""
+"""HexCompare 0.1.4 — PyQt6 desktop UI."""
 import sys
 from html import escape
 from pathlib import Path
@@ -14,7 +14,7 @@ from core import compare, load_binary, load_intel_hex
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("HexCompare 0.1.3")
+        self.setWindowTitle("HexCompare 0.1.4")
         self.resize(1250, 720)
         self.data = [None, None]
         self.paths = [None, None]
@@ -108,7 +108,7 @@ class Window(QMainWindow):
         for col, width in enumerate(widths):
             header.resizeSection(col, width)
         try:
-            self.table.setRowCount(len(blocks) * (2 if stacked else 1))
+            self.table.setRowCount(len(blocks) * (3 if stacked else 1))
             for row, start in enumerate(blocks):
                 if not stacked:
                     self.table.setItem(row, 0, QTableWidgetItem(f"{start:08X}"))
@@ -123,7 +123,7 @@ class Window(QMainWindow):
                             c = f'<span style="color:#e02020;font-weight:bold">{c}</span>'
                         hex_values.append(h)
                         ascii_values.append(c)
-                    target_row = row * 2 + side if stacked else row
+                    target_row = row * 3 + side if stacked else row
                     if stacked:
                         self.table.setItem(target_row, 0, QTableWidgetItem(f'{start:08X}'))
                         self.table.setItem(target_row, 1, QTableWidgetItem(f'File {side + 1}'))
@@ -139,6 +139,11 @@ class Window(QMainWindow):
                         )
                         self.table.setCellWidget(target_row, column, widget)
                     self.table.setRowHeight(target_row, 28)
+                if stacked:
+                    spacer_row = row * 3 + 2
+                    self.table.setRowHeight(spacer_row, 14)
+                    for col in range(4):
+                        self.table.setItem(spacer_row, col, QTableWidgetItem(''))
         finally:
             self.table.setUpdatesEnabled(True)
 

@@ -1,8 +1,8 @@
-"""HexCompare 0.1.5 — PyQt6 desktop UI."""
+"""HexCompare 0.1.6 — PyQt6 desktop UI."""
 import sys
 from html import escape
 from pathlib import Path
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSettings
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
@@ -32,11 +32,12 @@ class Loader(QThread):
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("HexCompare 0.1.5")
+        self.setWindowTitle("HexCompare 0.1.6")
         self.resize(1250, 720)
         self.data = [None, None]
         self.paths = [None, None]
         self.loader = None
+        self.settings = QSettings('HexCompare', 'HexCompare')
         root = QWidget()
         self.setCentralWidget(root)
         layout = QVBoxLayout(root)
@@ -60,6 +61,12 @@ class Window(QMainWindow):
         self.diff_layout.addItems(['Side by side', 'Stacked'])
         self.diff_layout.currentIndexChanged.connect(self.refresh)
         bar.addWidget(self.diff_layout)
+        bar.addWidget(QLabel('Theme:'))
+        self.theme_selector = QComboBox()
+        self.theme_selector.addItems(['Light', 'Dark'])
+        self.theme_selector.setCurrentIndex(1 if self.settings.value('theme', 'Light') == 'Dark' else 0)
+        self.theme_selector.currentTextChanged.connect(self.apply_theme)
+        bar.addWidget(self.theme_selector)
         layout.addLayout(bar)
         self.paths_label = QLabel("Choose two files.")
         layout.addWidget(self.paths_label)
@@ -78,6 +85,23 @@ class Window(QMainWindow):
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         layout.addWidget(self.table)
+        self.apply_theme(self.theme_selector.currentText())
+
+    def apply_theme(self, theme):
+        self.settings.setValue('theme', theme)
+        if theme == 'Dark':
+            self.setStyleSheet('''
+                QMainWindow, QWidget { background-color: #20242b; color: #e6e9ef; }
+                QPushButton, QComboBox { background-color: #343a45; color: #f1f3f7; border: 1px solid #626b79; padding: 5px; }
+                QPushButton:disabled { color: #8b929d; }
+                QTableWidget { background-color: #242a33; alternate-background-color: #2c333e; color: #e6e9ef; gridline-color: #4a5260; }
+                QHeaderView::section { background-color: #343a45; color: #f1f3f7; padding: 5px; border: 1px solid #4a5260; }
+                QProgressBar { border: 1px solid #626b79; text-align: center; }
+                QProgressBar::chunk { background-color: #4d91d8; }
+            ''')
+        else:
+            self.setStyleSheet('')
+        self.refresh()
 
     def reset(self):
         self.data = [None, None]
@@ -160,7 +184,7 @@ class Window(QMainWindow):
                         h = f"{byte:02X}" if byte is not None else "--"
                         c = escape(chr(byte)) if byte is not None and 32 <= byte <= 126 else ("." if byte is not None else "&nbsp;")
                         if address in changed:
-                            h = f'<span style="color:#e02020;font-weight:bold">{h}</span>'
+                            h = f'<span style="color:#ff7777;font-weight:bold">{h}</span>'
                             c = f'<span style="color:#e02020;font-weight:bold">{c}</span>'
                         hex_values.append(h)
                         ascii_values.append(c)
@@ -173,10 +197,12 @@ class Window(QMainWindow):
                         widget.setFrameShape(QTextBrowser.Shape.NoFrame)
                         widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
                         widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-                        widget.setStyleSheet("background:transparent;border:0;padding:0")
+                        dark = self.theme_selector.currentText() == 'Dark'
+                        widget.setStyleSheet('background:transparent;border:0;padding:0')
                         widget.setHtml(
                             '<div style="font-family:Consolas,monospace;font-size:10pt;white-space:nowrap">'
-                            + content + "</div>"
+                            + ('<span style="color:#e6e9ef">' if dark else '<span style="color:#20242b">')
+                            + content + '</span></div>'
                         )
                         self.table.setCellWidget(target_row, column, widget)
                     self.table.setRowHeight(target_row, 28)

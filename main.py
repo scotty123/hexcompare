@@ -1,23 +1,42 @@
-"""HexCompare 0.1.4 — PyQt6 desktop UI."""
+"""HexCompare 0.1.5 — PyQt6 desktop UI."""
 import sys
 from html import escape
 from pathlib import Path
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
     QLabel, QMainWindow, QMessageBox, QPushButton, QTableWidget,
-    QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QHeaderView,
+    QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget, QHeaderView, QProgressBar,
 )
 from core import compare, load_binary, load_intel_hex
+
+class Loader(QThread):
+    progress = pyqtSignal(int)
+    loaded = pyqtSignal(object)
+    failed = pyqtSignal(str)
+
+    def __init__(self, path, intel_hex):
+        super().__init__()
+        self.path = path
+        self.intel_hex = intel_hex
+
+    def run(self):
+        try:
+            loader = load_intel_hex if self.intel_hex else load_binary
+            self.loaded.emit(loader(self.path, self.progress.emit))
+        except (OSError, UnicodeError, ValueError) as exc:
+            self.failed.emit(str(exc))
+
 
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("HexCompare 0.1.4")
+        self.setWindowTitle("HexCompare 0.1.5")
         self.resize(1250, 720)
         self.data = [None, None]
         self.paths = [None, None]
+        self.loader = None
         root = QWidget()
         self.setCentralWidget(root)
         layout = QVBoxLayout(root)
@@ -26,10 +45,12 @@ class Window(QMainWindow):
         self.mode.addItems(["Intel HEX", "Binary"])
         self.mode.currentIndexChanged.connect(self.reset)
         bar.addWidget(self.mode)
+        self.open_buttons = []
         for i in range(2):
             button = QPushButton(f"Open file {i + 1}")
             button.clicked.connect(lambda _=False, index=i: self.open_file(index))
             bar.addWidget(button)
+            self.open_buttons.append(button)
         self.differences_only = QCheckBox("Only differing blocks")
         self.differences_only.setChecked(True)
         self.differences_only.toggled.connect(self.refresh)
@@ -42,6 +63,11 @@ class Window(QMainWindow):
         layout.addLayout(bar)
         self.paths_label = QLabel("Choose two files.")
         layout.addWidget(self.paths_label)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.hide()
+        layout.addWidget(self.progress_bar)
         self.summary = QLabel("")
         layout.addWidget(self.summary)
         self.table = QTableWidget(0, 5)
@@ -64,17 +90,32 @@ class Window(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "Open file", "", filters)
         if not path:
             return
-        try:
-            loaded = load_intel_hex(path) if self.mode.currentIndex() == 0 else load_binary(path)
-        except (OSError, UnicodeError, ValueError) as exc:
-            QMessageBox.critical(self, "Invalid file", str(exc))
-            return
+        self.progress_bar.setValue(0)
+        self.progress_bar.show()
+        self.mode.setEnabled(False)
+        for button in self.open_buttons:
+            button.setEnabled(False)
+        self.loader = Loader(path, self.mode.currentIndex() == 0)
+        self.loader.progress.connect(self.progress_bar.setValue)
+        self.loader.loaded.connect(lambda data: self.load_completed(index, path, data))
+        self.loader.failed.connect(lambda message: QMessageBox.critical(self, "Invalid file", message))
+        self.loader.finished.connect(self.load_finished)
+        self.loader.start()
+
+    def load_completed(self, index, path, loaded):
         self.data[index] = loaded
         self.paths[index] = path
         self.paths_label.setText("   |   ".join(
             f"File {i + 1}: {Path(p).name if p else '—'}" for i, p in enumerate(self.paths)
         ))
         self.refresh()
+
+    def load_finished(self):
+        self.progress_bar.hide()
+        self.mode.setEnabled(True)
+        for button in self.open_buttons:
+            button.setEnabled(True)
+        self.loader = None
 
     def refresh(self):
         self.table.setRowCount(0)

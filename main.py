@@ -1,4 +1,4 @@
-"""HexCompare 0.1.1 — PyQt6 desktop UI."""
+"""HexCompare 0.1.2 — PyQt6 desktop UI."""
 import sys
 from html import escape
 from pathlib import Path
@@ -14,7 +14,7 @@ from core import compare, load_binary, load_intel_hex
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("HexCompare 0.1.1")
+        self.setWindowTitle("HexCompare 0.1.2")
         self.resize(1250, 720)
         self.data = [None, None]
         self.paths = [None, None]
@@ -50,7 +50,7 @@ class Window(QMainWindow):
         )
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         layout.addWidget(self.table)
 
     def reset(self):
@@ -99,6 +99,14 @@ class Window(QMainWindow):
             ['Address', 'File 1 HEX', 'File 2 HEX', 'File 1 ASCII', 'File 2 ASCII']
         )
         self.table.setUpdatesEnabled(False)
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        if stacked:
+            widths = [105, 75, 490, 185]
+        else:
+            widths = [105, 490, 490, 185, 185]
+        for col, width in enumerate(widths):
+            header.resizeSection(col, width)
         try:
             self.table.setRowCount(len(blocks) * (2 if stacked else 1))
             for row, start in enumerate(blocks):

@@ -1,4 +1,4 @@
-"""HexCompare 0.1.6 — PyQt6 desktop UI."""
+"""HexCompare 0.1.7 — PyQt6 desktop UI."""
 import sys
 from html import escape
 from pathlib import Path
@@ -32,11 +32,13 @@ class Loader(QThread):
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("HexCompare 0.1.6")
+        self.setWindowTitle("HexCompare 0.1.7")
         self.resize(1250, 720)
         self.data = [None, None]
         self.paths = [None, None]
         self.loader = None
+        self.page = 0
+        self.page_size = 200
         self.settings = QSettings('HexCompare', 'HexCompare')
         root = QWidget()
         self.setCentralWidget(root)
@@ -54,12 +56,12 @@ class Window(QMainWindow):
             self.open_buttons.append(button)
         self.differences_only = QCheckBox("Only differing blocks")
         self.differences_only.setChecked(True)
-        self.differences_only.toggled.connect(self.refresh)
+        self.differences_only.toggled.connect(self.reset_page)
         bar.addWidget(self.differences_only)
         bar.addWidget(QLabel('Diff layout:'))
         self.diff_layout = QComboBox()
         self.diff_layout.addItems(['Side by side', 'Stacked'])
-        self.diff_layout.currentIndexChanged.connect(self.refresh)
+        self.diff_layout.currentIndexChanged.connect(self.reset_page)
         bar.addWidget(self.diff_layout)
         bar.addWidget(QLabel('Theme:'))
         self.theme_selector = QComboBox()
@@ -85,6 +87,17 @@ class Window(QMainWindow):
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         layout.addWidget(self.table)
+        navigation = QHBoxLayout()
+        self.previous_button = QPushButton('◀ Previous')
+        self.previous_button.clicked.connect(lambda: self.change_page(-1))
+        navigation.addWidget(self.previous_button)
+        self.page_label = QLabel('Page 1 / 1')
+        navigation.addWidget(self.page_label)
+        self.next_button = QPushButton('Next ▶')
+        self.next_button.clicked.connect(lambda: self.change_page(1))
+        navigation.addWidget(self.next_button)
+        navigation.addStretch()
+        layout.addLayout(navigation)
         self.apply_theme(self.theme_selector.currentText())
 
     def apply_theme(self, theme):
@@ -103,9 +116,18 @@ class Window(QMainWindow):
             self.setStyleSheet('')
         self.refresh()
 
+    def reset_page(self, *_):
+        self.page = 0
+        self.refresh()
+
+    def change_page(self, offset):
+        self.page += offset
+        self.refresh()
+
     def reset(self):
         self.data = [None, None]
         self.paths = [None, None]
+        self.page = 0
         self.paths_label.setText("Choose two files.")
         self.refresh()
 
@@ -128,6 +150,7 @@ class Window(QMainWindow):
 
     def load_completed(self, index, path, loaded):
         self.data[index] = loaded
+        self.page = 0
         self.paths[index] = path
         self.paths_label.setText("   |   ".join(
             f"File {i + 1}: {Path(p).name if p else '—'}" for i, p in enumerate(self.paths)
@@ -145,6 +168,9 @@ class Window(QMainWindow):
         self.table.setRowCount(0)
         if any(d is None for d in self.data):
             self.summary.setText("Select two files to compare.")
+            self.page_label.setText("Page 0 / 0")
+            self.previous_button.setEnabled(False)
+            self.next_button.setEnabled(False)
             return
         left, right = self.data
         result = compare(left, right)
@@ -156,6 +182,12 @@ class Window(QMainWindow):
         blocks = result.blocks if self.differences_only.isChecked() else tuple(
             sorted({address // 16 * 16 for address in left.keys() | right.keys()})
         )
+        total_pages = max(1, (len(blocks) + self.page_size - 1) // self.page_size)
+        self.page = max(0, min(self.page, total_pages - 1))
+        self.page_label.setText(f'Page {self.page + 1:,} / {total_pages:,}  ({len(blocks):,} blocks)')
+        self.previous_button.setEnabled(self.page > 0)
+        self.next_button.setEnabled(self.page + 1 < total_pages)
+        blocks = blocks[self.page * self.page_size:(self.page + 1) * self.page_size]
         changed = set(result.changed)
         stacked = self.diff_layout.currentIndex() == 1
         self.table.setColumnCount(4 if stacked else 5)
